@@ -2,7 +2,9 @@ import math
 
 from selfdrive.controls.lib.pid import PIController
 from selfdrive.controls.lib.drive_helpers import get_steer_max
+from common.numpy_fast import clip
 from cereal import log
+from torque_model.models.fifth_model import predict as model_predict
 
 
 class LatControlPID():
@@ -39,8 +41,16 @@ class LatControlPID():
       deadzone = 0.0
 
       check_saturation = (CS.vEgo > 10) and not CS.steeringRateLimited and not CS.steeringPressed
-      output_steer = self.pid.update(angle_steers_des, CS.steeringAngleDeg, check_saturation=check_saturation, override=CS.steeringPressed,
-                                     feedforward=steer_feedforward, speed=CS.vEgo, deadzone=deadzone)
+      # output_steer = self.pid.update(angle_steers_des, CS.steeringAngleDeg, check_saturation=check_saturation, override=CS.steeringPressed,
+      #                                feedforward=steer_feedforward, speed=CS.vEgo, deadzone=deadzone)
+
+      rate_des = 0  # lat_plan.steeringRateDeg if self.op_params.get('model_use_des_rate') else 0
+      rate = 0  # CS.steeringRateDeg if self.op_params.get('model_use_rate') else 0
+      model_input = [angle_steers_des, CS.steeringAngleDeg, rate_des, rate, CS.vEgo]
+
+      output_steer = model_predict(model_input)[0]
+      output_steer = float(clip(output_steer, -1, 1))
+
       pid_log.active = True
       pid_log.p = self.pid.p
       pid_log.i = self.pid.i
